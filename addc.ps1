@@ -20,7 +20,7 @@ if(! (Test-Path -Path "C:\Temp"))
 
 
 if((Get-Content $StateFile) -eq 0)
-{    
+{
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [Active Directory Domain Services]"
     Install-WindowsFeature -name "AD-Domain-Services" -IncludeManagementTools
 
@@ -107,6 +107,7 @@ if((Get-Content $StateFile) -eq 4)
         "sccmadmins"
     )
 
+    Write-Host "working: [$(Get-Date -Format "HH:mm:ss")] [Creating OUs, Groups and Users]"
     New-ADOrganizationalUnit -Name "Savannah" -Path "DC=homelabcoderz, DC=com"
 
     foreach($OrgUnit in $OrgUnits)
@@ -136,7 +137,9 @@ if((Get-Content $StateFile) -eq 4)
     Add-ADGroupMember -Identity "sccmadmins" -Members "sccmadmin"
     Add-ADGroupMember -Identity "sccmadmins" -Members "sccmremoteuser"
 
-    "5" | Out-File -FilePath $StateFile
+    Remove-Item -Path $StateFile | Out-Null
+
+    Write-Host "completed: [$(Get-Date -Format "HH:mm:ss")]"
 }
 
 
