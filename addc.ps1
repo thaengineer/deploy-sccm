@@ -1,7 +1,8 @@
-$ADDCFeatures = Get-Content -Path '.\dsdc-features.txt'
 $state_file = "C:\Temp\state.txt"
 $DomainName = "homelabcoderz.com"
 $pass       = ConvertTo-SecureString "Password?123" -AsPlainText -Force
+$ADDSHostName = "DC01"
+$SCCMHostName = "CM01"
 
 
 # ((Get-WindowsFeature) | where { $_.InstallState -eq 'Installed' })
@@ -37,21 +38,22 @@ if((Get-Content $state_file) -eq 1)
     $PrefixLen   = 24
     $GateWay     = "192.168.160.1"
     $DNSServers = ("1.1.1.1", "1.0.0.1")
-    $HostName    = "DC01"
 
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [DHCP]"
     Install-WindowsFeature -name "DHCP" -IncludeManagementTools
 
-    Add-DhcpServerv4Scope -Name "Scope" -StartRange "192.168.160.2" -EndRange "192.168.160.200" -SubnetMask "255.255.255.0" -LeaseDuration 8.00:00:00
-    Add-DhcpServerInDC -DnsName $HostName.$DomainName -IPAddress $IPAddress
-    Set-ItemProperty -Path "HKLM\SOFTWARE\Microsoft\ServerManager\Roles\12" -Name "ConfigurationState" -Value "2"
+    Add-DhcpServerv4Scope -Name "Scope" -StartRange "192.168.160.2" -EndRange "192.168.160.200" -SubnetMask $NetMask -LeaseDuration 8.00:00:00
+    Add-DhcpServerInDC -DnsName $ADDSHostName.$DomainName -IPAddress $IPAddress
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\12" -Name "ConfigurationState" -Value "2"
 
     New-NetIPAddress -IPAddress $IPAddress -InterfaceAlias $NIC -DefaultGateway $GateWay -AddressFamily "IPv4" -PrefixLength $PrefixLen
     Set-DnsClientServerAddress -InterfaceAlias $NIC -ServerAddresses $DNSServers
 
-    Rename-Computer -NewName $HostName -Restart
+    Rename-Computer -NewName $ADDSHostName
 
     "2" | Out-File -FilePath $state_file
+
+    Restart-Computer
 }
 
 
@@ -72,19 +74,67 @@ if((Get-Content $state_file) -eq 2)
     "3" | Out-File -FilePath $state_file
 }
 
+
 if((Get-Content $state_file) -eq 3)
 {
     # Extend Active Directory Schema
     $SCCMHostName = "CM01"
-    & "\\$SCCMHostName\c$\Media\SCCM\SMSSETUP\BIN\X64\extadsch.exe"
-    Get-Content "C:\ExtADSch.log" | Select-String "the Active Directory Schema"
 
-    "4" | Out-File -FilePath $state_file
+    if(! (Test-Path -Path "\\$SCCMHostName\c$"))
+    {
+        Write-Host "error: path to $SCCMHostName not found"
+        exit(1)
+    }
+    else
+    {
+        & "\\$SCCMHostName\c$\Media\SCCM\SMSSETUP\BIN\X64\extadsch.exe"
+        Get-Content "C:\ExtADSch.log" | Select-String "the Active Directory Schema"
+
+        "4" | Out-File -FilePath $state_file
+    }
 }
 
 if((Get-Content $state_file) -eq 4)
 {
-    
+    $OrgUnits = @(
+        "Groups",
+        "Users",
+        "ServiceUsers"
+    )
+    $DomainAdmins = @(
+        "admins",
+        "sqladmins",
+        "sccmadmins"
+    )
+
+    New-ADOrganizationalUnit -Name "Savannah" -Path "DC=homelabcoderz, DC=com"
+
+    foreach($OrgUnit in $OrgUnits)
+    {
+        New-ADOrganizationalUnit -Name $OrgUnit -Path "OU=Savannah, DC=homelabcoderz, DC=com"
+    }
+
+    New-ADGroup -Name "Admins" -SamAccountName "admins" -DisplayName "Savannah Admins" -Description "Savannah Admins" -GroupCategory "Security" -GroupScope "Global" -Path "OU=Groups, OU=Savannah, DC=homelabcoderz, DC=com"
+    New-ADGroup -Name "SQLAdmins" -SamAccountName "sqladmins" -DisplayName "Savannah SQL Admins" -Description "Savannah SQL Admins" -GroupCategory "Security" -GroupScope "Global" -Path "OU=Groups, OU=Savannah, DC=homelabcoderz, DC=com"
+    New-ADGroup -Name "SCCMAdmins" -SamAccountName "sccmadmins" -DisplayName "Savannah SCCM Admins" -Description "Savannah SCCM Admins" -GroupCategory "Security" -GroupScope "Global" -Path "OU=Groups, OU=Savannah, DC=homelabcoderz, DC=com"
+
+    New-ADUser -Name "Admin" -SamAccountName "admin" -UserPrincipalName "admin" -GivenName "IT" -Surname "Admin" -DisplayName "Admin" -AccountPassword $pass -Path "OU=Users, OU=Savannah, DC=homelabcoderz, DC=com" -ChangePasswordAtLogon $false -CannotChangePassword $false -PasswordNeverExpires $true -Enabled $true
+    New-ADUser -Name "SQLAdmin" -SamAccountName "sqladmin" -UserPrincipalName "sqladmin" -GivenName "SQL" -Surname "Admin" -DisplayName "SQL Admin" -AccountPassword $pass -Path "OU=Users, OU=Savannah, DC=homelabcoderz, DC=com" -ChangePasswordAtLogon $false -CannotChangePassword $false -PasswordNeverExpires $true -Enabled $true
+    New-ADUser -Name "ADSync" -SamAccountName "adsync" -UserPrincipalName "adsync" -GivenName "ADSync" -Surname "Admin" -DisplayName "AD Sync Admin" -AccountPassword $pass -Path "OU=Users, OU=Savannah, DC=homelabcoderz, DC=com" -ChangePasswordAtLogon $false -CannotChangePassword $false -PasswordNeverExpires $true -Enabled $true
+    New-ADUser -Name "SCCMAdmin" -SamAccountName "sccmadmin" -UserPrincipalName "sccmadmin" -GivenName "SCCM" -Surname "Admin" -DisplayName "SCCM Admin" -AccountPassword $pass -Path "OU=Users, OU=Savannah, DC=homelabcoderz, DC=com" -ChangePasswordAtLogon $false -CannotChangePassword $false -PasswordNeverExpires $true -Enabled $true
+    New-ADUser -Name "SCCMRemoteUser" -SamAccountName "sccmremoteuser" -UserPrincipalName "sccmremoteuser" -GivenName "SCCMRemote" -Surname "Admin" -DisplayName "SCCM Remote Admin" -AccountPassword $pass -Path "OU=Users, OU=Savannah, DC=homelabcoderz, DC=com" -ChangePasswordAtLogon $false -CannotChangePassword $false -PasswordNeverExpires $true -Enabled $true
+    New-ADUser -Name "Test" -SamAccountName "test" -UserPrincipalName "test" -GivenName "Test" -Surname "User" -DisplayName "Test User" -AccountPassword $pass -Path "OU=Users, OU=Savannah, DC=homelabcoderz, DC=com" -ChangePasswordAtLogon $false -CannotChangePassword $false -PasswordNeverExpires $true -Enabled $true
+
+    foreach($DomainAdmin in $DomainAdmins)
+    {
+        Add-ADGroupMember -Identity "Domain Admins" -Members $DomainAdmin
+    }
+
+    Add-ADGroupMember -Identity "admins" -Members "admin"
+    Add-ADGroupMember -Identity "sqladmins" -Members "sqladmin"
+    Add-ADGroupMember -Identity "sccmadmins" -Members "adsync"
+    Add-ADGroupMember -Identity "sccmadmins" -Members "sccmadmin"
+    Add-ADGroupMember -Identity "sccmadmins" -Members "sccmremoteuser"
 
     "5" | Out-File -FilePath $state_file
 }
@@ -106,35 +156,6 @@ if((Get-Content $state_file) -eq 4)
 #{
 #install-Windowsfeature -Name $feature
 #}
-
-#New-ADOrganizationalUnit -Name "Savannah" -Path "dc=homelabcoderz,dc=com"
-#$OUs = @(
-#"Server",
-#"Hyper-v",
-#"Application",
-#"AdminUsers",
-#"ServiceUsers",
-#"Users",
-#"Group"
-#)
-#foreach($OU in $OUs)
-#{
-#New-ADOrganizationalUnit -Name $OU -Path "OU=Savannah, dc=homelabcoderz,dc=com"
-#}
-
-#New-ADGroup -Name "Admins" -SamAccountName "Admins" -GroupScope Global -GroupCategory Security -Description "Admins_Group" -Path "OU=Group, OU=Savannah, dc=homelabcoderz,dc=com"
-#New-ADGroup -Name "SQL" -SamAccountName "SQL" -GroupScope Global -GroupCategory Security -Description "Admins_SQl" -Path "OU=Group, OU=Savannah, dc=homelabcoderz,dc=com"
-#New-ADGroup -Name "Hyper-v" -SamAccountName "Hyper-v" -GroupScope Global -GroupCategory Security -Description "Admins_Hyper-v" -Path "OU=Group, OU=Savannah, dc=homelabcoderz,dc=com"
-#New-ADGroup -Name "Application" -SamAccountName "Application" -GroupScope Global -GroupCategory Security -Description "Admins_Application" -Path "OU=Group, OU=Savannah, dc=homelabcoderz,dc=com"
-    
-#New-ADUser -Name "Admin" -UserPrincipalName "admin" -SamAccountName "admin" -GivenName "Admin" -Surname "IT" -DisplayName "Admin IT" -AccountPassword $pass -CannotChangePassword $false -Enabled $true -Path "OU=AdminUsers, OU=Savannah, dc=homelabcoderz,dc=com"
-#New-ADUser -Name "SQL" -UserPrincipalName "admin" -SamAccountName "admin" -GivenName "Admin" -Surname "IT" -DisplayName "Admin IT" -AccountPassword $pass -CannotChangePassword $false -Enabled $true -Path "OU=AdminUsers, OU=Savannah, dc=homelabcoderz,dc=com"
-#New-ADUser -Name "ADSync" -UserPrincipalName "admin" -SamAccountName "admin" -GivenName "Admin" -Surname "IT" -DisplayName "Admin IT" -AccountPassword $pass -CannotChangePassword $false -Enabled $true -Path "OU=AdminUsers, OU=Savannah, dc=homelabcoderz,dc=com"
-#New-ADUser -Name "SCCMAdmin" -UserPrincipalName "admin" -SamAccountName "admin" -GivenName "Admin" -Surname "IT" -DisplayName "Admin IT" -AccountPassword $pass -CannotChangePassword $false -Enabled $true -Path "OU=AdminUsers, OU=Savannah, dc=homelabcoderz,dc=com"
-#New-ADUser -Name "SCCMRemoteUser" -UserPrincipalName "admin" -SamAccountName "admin" -GivenName "Admin" -Surname "IT" -DisplayName "Admin IT" -AccountPassword $pass -CannotChangePassword $false -Enabled $true -Path "OU=AdminUsers, OU=Savannah, dc=homelabcoderz,dc=com"
-#New-ADUser -Name "User" -UserPrincipalName "admin" -SamAccountName "admin" -GivenName "Admin" -Surname "IT" -DisplayName "Admin IT" -AccountPassword $pass -CannotChangePassword $false -Enabled $true -Path "OU=Users, OU=Savannah, dc=homelabcoderz,dc=com"
-
-#Add-ADGroupMember "" admin
 
 ########################################
 ########################################
