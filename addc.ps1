@@ -14,7 +14,7 @@ if(! (Test-Path -Path "C:\Temp"))
     if(! (Test-Path -Path "C:\Temp\state.txt"))
     {
         New-Item -Path "C:\Temp" -Name "state.txt" -ItemType File | Out-Null
-        "0" | OutFile -FilePath $StateFile
+        "0" | Out-File -FilePath $StateFile
     }
 }
 
@@ -39,17 +39,17 @@ if((Get-Content $StateFile) -eq 1)
     $GateWay     = "192.168.160.1"
     $DNSServers = ("1.1.1.1", "1.0.0.1")
 
-    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [DHCP]"
-    Install-WindowsFeature -name "DHCP" -IncludeManagementTools
-
-    Add-DhcpServerv4Scope -Name "Scope" -StartRange "192.168.160.2" -EndRange "192.168.160.200" -SubnetMask $NetMask -LeaseDuration 8.00:00:00
-    Add-DhcpServerInDC -DnsName $ADDSHostName.$DomainName -IPAddress $IPAddress
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\12" -Name "ConfigurationState" -Value "2"
-
     New-NetIPAddress -IPAddress $IPAddress -InterfaceAlias $NIC -DefaultGateway $GateWay -AddressFamily "IPv4" -PrefixLength $PrefixLen
     Set-DnsClientServerAddress -InterfaceAlias $NIC -ServerAddresses $DNSServers
 
     Rename-Computer -NewName $ADDSHostName
+
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [DHCP]"
+    Install-WindowsFeature -name "DHCP" -IncludeManagementTools
+
+    Add-DhcpServerv4Scope -Name "Scope" -StartRange "192.168.160.2" -EndRange "192.168.160.200" -SubnetMask $NetMask -LeaseDuration 8.00:00:00
+    Add-DhcpServerInDC -DnsName "$ADDSHostName.$DomainName" -IPAddress $IPAddress
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\12" -Name "ConfigurationState" -Value "2"
 
     "2" | Out-File -FilePath $StateFile
 
@@ -141,24 +141,3 @@ if((Get-Content $StateFile) -eq 4)
 
     Write-Host "completed: [$(Get-Date -Format "HH:mm:ss")]"
 }
-
-
-########################################
-########################################
-
-#$features = @(
-#'RSAT-Role-Tools'
-#'RSAT-AD-Tools',
-#'RSAT-AD-PowerShell',
-#'RSAT-ADLDS',
-#'RSAT-ADDS',
-#'RSAT-ADDS-Tools',
-#'RSAT-AD-AdminCenter'
-#)
-#foreach($feature in $features)
-#{
-#install-Windowsfeature -Name $feature
-#}
-
-########################################
-########################################
