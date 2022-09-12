@@ -1,2 +1,2 @@
-# deploy-sccm
+# Automated SCCM Deployment
 Deploy SCCM via PowerShell
