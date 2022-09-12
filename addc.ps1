@@ -1,4 +1,4 @@
-$state_file = "C:\Temp\state.txt"
+$StateFile = "C:\Temp\state.txt"
 $DomainName = "homelabcoderz.com"
 $pass       = ConvertTo-SecureString "Password?123" -AsPlainText -Force
 $ADDSHostName = "DC01"
@@ -14,23 +14,23 @@ if(! (Test-Path -Path "C:\Temp"))
     if(! (Test-Path -Path "C:\Temp\state.txt"))
     {
         New-Item -Path "C:\Temp" -Name "state.txt" -ItemType File | Out-Null
-        "0" | OutFile -FilePath $state_file
+        "0" | OutFile -FilePath $StateFile
     }
 }
 
 
-if((Get-Content $state_file) -eq 0)
+if((Get-Content $StateFile) -eq 0)
 {    
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [Active Directory Domain Services]"
     Install-WindowsFeature -name "AD-Domain-Services" -IncludeManagementTools
 
     Install-ADDSForest -DomainName "homelabcoderz.com" -SafeModeAdministratorPassword $pass -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainNetbiosName "HOMELABCODERZ" -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$true -SysvolPath "C:\Windows\SYSVOL" -Force:$true -Verbose
 
-    "1" | Out-File -FilePath $state_file
+    "1" | Out-File -FilePath $StateFile
 }
 
 
-if((Get-Content $state_file) -eq 1)
+if((Get-Content $StateFile) -eq 1)
 {
     $NIC         = (Get-NetAdapter).Name
     $IPAddress   = "192.168.160.2"
@@ -51,13 +51,13 @@ if((Get-Content $state_file) -eq 1)
 
     Rename-Computer -NewName $ADDSHostName
 
-    "2" | Out-File -FilePath $state_file
+    "2" | Out-File -FilePath $StateFile
 
     Restart-Computer
 }
 
 
-if((Get-Content $state_file) -eq 2)
+if((Get-Content $StateFile) -eq 2)
 {
     # Create System Management container and delegate access to the SCCM Server
     $SCCMHostName = "CM01"
@@ -71,11 +71,11 @@ if((Get-Content $state_file) -eq 2)
     $ACL.AddAccessRule($ACE)
     Set-Acl -Path "ad:CN=System Management,CN=System,$root" -AclObject $ACL 
 
-    "3" | Out-File -FilePath $state_file
+    "3" | Out-File -FilePath $StateFile
 }
 
 
-if((Get-Content $state_file) -eq 3)
+if((Get-Content $StateFile) -eq 3)
 {
     # Extend Active Directory Schema
     $SCCMHostName = "CM01"
@@ -90,11 +90,11 @@ if((Get-Content $state_file) -eq 3)
         & "\\$SCCMHostName\c$\Media\SCCM\SMSSETUP\BIN\X64\extadsch.exe"
         Get-Content "C:\ExtADSch.log" | Select-String "the Active Directory Schema"
 
-        "4" | Out-File -FilePath $state_file
+        "4" | Out-File -FilePath $StateFile
     }
 }
 
-if((Get-Content $state_file) -eq 4)
+if((Get-Content $StateFile) -eq 4)
 {
     $OrgUnits = @(
         "Groups",
@@ -136,7 +136,7 @@ if((Get-Content $state_file) -eq 4)
     Add-ADGroupMember -Identity "sccmadmins" -Members "sccmadmin"
     Add-ADGroupMember -Identity "sccmadmins" -Members "sccmremoteuser"
 
-    "5" | Out-File -FilePath $state_file
+    "5" | Out-File -FilePath $StateFile
 }
 
 
