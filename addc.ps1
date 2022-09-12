@@ -1,6 +1,6 @@
-$StateFile = "C:\Temp\state.txt"
-$DomainName = "homelabcoderz.com"
-$pass       = ConvertTo-SecureString "Password?123" -AsPlainText -Force
+$StateFile    = "C:\Temp\state.txt"
+$DomainName   = "homelabcoderz.com"
+$pass         = ConvertTo-SecureString "Password?123" -AsPlainText -Force
 $ADDSHostName = "DC01"
 $SCCMHostName = "CM01"
 

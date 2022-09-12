@@ -43,6 +43,8 @@ Start-Process -FilePath "C:\Media\SQL\SSMS-Setup-ENU.exe" -ArgumentList "/instal
 
 #$FQDN=[system.net.dns]::GetHostByName("localhost").hostname
 
+#Set-NetFirewallRule -DisplayGroup "File And Printer Sharing" -Enabled True -Profile Private
+
 Write-Output 'Installing SCCM...'
 
 # Change Service Account Credentials
