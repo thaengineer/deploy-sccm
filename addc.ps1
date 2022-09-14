@@ -30,11 +30,13 @@ foreach($DC in 1..$DomainName.Split('.').Length)
 if(! (Test-Path -Path "C:\Temp"))
 {
     New-Item -Path "C:\" -Name "Temp" -ItemType Directory | Out-Null
-    if(! (Test-Path -Path "C:\Temp\state.txt"))
-    {
-        New-Item -Path "C:\Temp" -Name "state.txt" -ItemType File | Out-Null
-        "0" | Out-File -FilePath $StateFile
-    }
+}
+
+
+if(! (Test-Path -Path "C:\Temp\state.txt"))
+{
+    New-Item -Path "C:\Temp" -Name "state.txt" -ItemType File | Out-Null
+    "0" | Out-File -FilePath $StateFile
 }
 
 
@@ -84,8 +86,7 @@ if((Get-Content $StateFile) -eq 2)
         exit(1)
     }
 
-    # Create System Management container and delegate access to the SCCM Server
-    # $root         = (Get-ADRootDSE).defaultNamingContext
+    Write-Host "working: [$(Get-Date -Format "HH:mm:ss")] [Delegating System Management access to $SCCMHostName]"
     $OU           = New-ADObject -Name "System Management" -Path "CN=System, $DCString" -Type "Container" -PassThru
     $ACL          = Get-Acl "ad:$OU"
     $SID          = [System.Security.Principal.SecurityIdentifier] $Computer.SID
@@ -103,11 +104,12 @@ if((Get-Content $StateFile) -eq 3)
     # Extend Active Directory Schema
     if(! (Test-Path -Path "\\$SCCMHostName\c$"))
     {
-        Write-Host "error: path to $SCCMHostName not found"
+        Write-Host "error: [$(Get-Date -Format "HH:mm:ss")] path to $SCCMHostName not found"
         exit(1)
     }
     else
     {
+        Write-Host "working: [$(Get-Date -Format "HH:mm:ss")] [Extending AD Schema]"
         & "\\$SCCMHostName\c$\Media\SCCM\SMSSETUP\BIN\X64\extadsch.exe"
         #Get-Content "C:\ExtADSch.log" | Select-String "the Active Directory Schema"
 

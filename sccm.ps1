@@ -1,54 +1,106 @@
+$StateFile    = "C:\Temp\state.txt"
+$DomainName   = "homelabcoderz.com"
+$ADDSHostName = "DC01"
+$SCCMHostName = "CM01"
+# $SiteCode     = "S01"
 $SCCMFeatures = Get-Content -Path '.\sccm-features.txt'
-$SCCMHostname = 'SCCMVM'
+$DomainAdmin  = "$DomainName\Administrator"
+$Pass         = ConvertTo-SecureString -String "Password?123" -AsPlainText -Force
+$Credential   = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $DomainAdmin, $Pass
 
 
-Write-Host "Installing required features for SCCM..."
-
-foreach($feature in $SCCMFeatures)
+if(! (Test-Path -Path "C:\Temp"))
 {
-    if((Get-WindowsFeature -Name "$feature").InstallState -ne 'Installed')
-    {
-        Install-WindowsFeature -Name "$feature" -ComputerName $SCCMHostname
-    }
+    New-Item -Path "C:\" -Name "Temp" -ItemType Directory | Out-Null
 }
 
 
-Write-Output 'Extending AD Schema...'
-Start-Process -FilePath "C:\Media\SCCM\SMSSETUP\BIN\X64\extadsch.exe" -wait -WindowStyle Hidden
-
-Write-Output 'Installing MDT...'
-Start-Process -FilePath Msiexec.exe -ArgumentList "/i C:\Media\MDT\MicrosoftDeploymentToolkit_x64.msi /q /n /norestart" -wait -WindowStyle Hidden
-
-Write-Output 'Installing Windows ADK...'
-Start-Process -FilePath "C:\Media\ADK\adksetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.DeploymentTools OptionId.UserStateMigrationTool /q' -wait -WindowStyle Hidden
-Start-Process -FilePath "C:\Media\ADKPE\adksetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.WindowsPreinstallationEnvironment /q' -wait -WindowStyle Hidden
-
-Write-Output 'Installing Microsoft SQL Server...'
-Start-Process -FilePath "C:\Media\SQL\setup.exe" -ArgumentList "/CONFIGURATIONFILE=C:\Media\SQL\ConfigurationFile.ini /IACCEPTSQLSERVERLICENSETERMS" -wait -WindowStyle Hidden
-Start-Process -FilePath "C:\Media\SQL\SQLServerReportingServices.exe" -ArgumentList "/passive /norestart /IAcceptLicenseTerms /Edition=Eval" -wait -WindowStyle Hidden
-Start-Process -FilePath "C:\Media\SQL\SSMS-Setup-ENU.exe" -ArgumentList "/install /passive /norestart" -wait -WindowStyle Hidden
+if(! (Test-Path -Path "C:\Temp\state.txt"))
+{
+    New-Item -Path "C:\Temp" -Name "state.txt" -ItemType File | Out-Null
+    "0" | Out-File -FilePath $StateFile
+}
 
 
-#$Credential = Get-Credential -Message 'Enter SQL Service Account ID and Password.'
-#$UserName=$Credential.UserName
-#$Password=$Credential.getnetworkcredential().Password
-#$s=Get-CimInstance -ClassName win32_service -Filter 'Name="MSSQLSERVER"'    
-#Write-Output 'Assigning Credentials to SQL Server Service'
-#Stop-Service -Force -NoWait -Name MSSQLSERVER
-#$s | Invoke-CimMethod -MethodName Change -Arguments @{StartName=$Username ;StartPassword=$Password}
-#Start-Sleep -Seconds 10
-#Start-Service -Name MSSQLSERVER
-#Remove-Variable Username
-#Remove-Variable Password
+if((Get-Content $StateFile) -eq 0)
+{
+    Write-Host "joining: [$(Get-Date -Format "HH:mm:ss")] [$SCCMHostName -> $DomainName]"
 
-#$FQDN=[system.net.dns]::GetHostByName("localhost").hostname
+    Add-Computer -Credential $Credential -DomainName $DomainName -Server $ADDSHostName -NewName $SCCMHostName -Restart
 
-#Set-NetFirewallRule -DisplayGroup "File And Printer Sharing" -Enabled True -Profile Private
+    "1" | Out-File -FilePath $StateFile
+}
 
-Write-Output 'Installing SCCM...'
 
-# Change Service Account Credentials
-Start-Process -FilePath "C:\Media\SCCM\SMSSETUP\BIN\X64\setup.exe" -ArgumentList "/script C:\Media\SCCM\ConfigMgr.ini" -wait -WindowStyle Hidden
+# NEED TO REWRITE THIS, IT WILL FAIL
+if((Get-Content $StateFile) -eq 1)
+{
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [SCCM Features]"
 
-Write-Output 'Done!'
-Write-Output 'Please arrange for Post installation Configuration for the site'
+    foreach($feature in $SCCMFeatures)
+    {
+        if((Get-WindowsFeature -Name "$feature").InstallState -ne 'Installed')
+        {
+            Install-WindowsFeature -Name "$feature" -ComputerName $SCCMHostname
+        }
+    }
+
+    "2" | Out-File -FilePath $StateFile
+}
+
+
+if((Get-Content $StateFile) -eq 2)
+{
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [MDT]"
+
+    Start-Process -FilePath "C:\Windows\System32\msiexec.exe" -ArgumentList "/i C:\Media\MDT\MicrosoftDeploymentToolkit_x64.msi /q /n /norestart" -Wait -WindowStyle Hidden
+
+    "3" | Out-File -FilePath $StateFile
+}
+
+
+if((Get-Content $StateFile) -eq 3)
+{
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [ADK]"
+
+    Start-Process -FilePath "C:\Media\ADK\adksetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.DeploymentTools OptionId.UserStateMigrationTool /q' -Wait -WindowStyle Hidden
+    Start-Process -FilePath "C:\Media\ADKPE\adksetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.WindowsPreinstallationEnvironment /q' -Wait -WindowStyle Hidden
+
+    "4" | Out-File -FilePath $StateFile
+}
+
+
+if((Get-Content $StateFile) -eq 4)
+{
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [Microsoft SQL Server]"
+
+    Start-Process -FilePath "C:\Media\SQL\setup.exe" -ArgumentList "/CONFIGURATIONFILE=C:\Media\SQL\ConfigurationFile.ini /IACCEPTSQLSERVERLICENSETERMS" -Wait -WindowStyle Hidden
+    Start-Process -FilePath "C:\Media\SQL\SQLServerReportingServices.exe" -ArgumentList "/passive /norestart /IAcceptLicenseTerms /Edition=Eval" -Wait -WindowStyle Hidden
+    Start-Process -FilePath "C:\Media\SQL\SSMS-Setup-ENU.exe" -ArgumentList "/install /passive /norestart" -Wait -WindowStyle Hidden
+
+    "5" | Out-File -FilePath $StateFile
+}
+
+
+if((Get-Content $StateFile) -eq 5)
+{
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [System Center Configuration Manager]"
+
+    Start-Process -FilePath "C:\Media\SCCM\SMSSETUP\BIN\X64\setup.exe" -ArgumentList "/script C:\Media\SCCM\ConfigMgr.ini" -Wait -WindowStyle Hidden
+
+    "6" | Out-File -FilePath $StateFile
+}
+
+
+if((Get-Content $StateFile) -eq 6)
+{
+    Remove-Item -Path $StateFile | Out-Null
+
+    Write-Host "done: [$(Get-Date -Format "HH:mm:ss")]"
+}
+
+
+#$PayLoad = {
+#    Set-NetFirewallRule -DisplayGroup "File And Printer Sharing" -Enabled True -Profile Private
+#}
+#Invoke-Command -ComputerName $ADDSHostName -ScriptBlock $PayLoad
