@@ -48,6 +48,8 @@ if((Get-Content $StateFile) -eq 0)
     Install-ADDSForest -DomainName $DomainName -SafeModeAdministratorPassword $pass -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainNetbiosName $NetBIOSName -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$true -SysvolPath "C:\Windows\SYSVOL" -Force:$true -Verbose
 
     "1" | Out-File -FilePath $StateFile
+
+    Restart-Computer
 }
 
 
@@ -56,25 +58,34 @@ if((Get-Content $StateFile) -eq 1)
     New-NetIPAddress -IPAddress $IPAddress -InterfaceAlias $NIC -DefaultGateway $GateWay -AddressFamily "IPv4" -PrefixLength $PrefixLen
     Set-DnsClientServerAddress -InterfaceAlias $NIC -ServerAddresses $DNSServers
 
-    Rename-Computer -NewName $ADDSHostName
+    Start-Sleep -Seconds 10
 
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [DHCP]"
     Install-WindowsFeature -name "DHCP" -IncludeManagementTools
 
     Add-DhcpServerv4Scope -Name "Scope" -StartRange $DHCPRange[0] -EndRange $DHCPRange[1] -SubnetMask $NetMask -LeaseDuration 8.00:00:00
-    Add-DhcpServerInDC -DnsName "$ADDSHostName.$DomainName" -IPAddress $IPAddress
+    # Add-DhcpServerInDC -DnsName "$ADDSHostName.$DomainName" -IPAddress $IPAddress
 
     Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\12" -Name "ConfigurationState" -Value "2"
 
     "2" | Out-File -FilePath $StateFile
 
-    exit(0)
-
-    # Restart-Computer
+    Restart-Computer
 }
 
 
 if((Get-Content $StateFile) -eq 2)
+{
+    Write-Host "working: [$(Get-Date -Format "HH:mm:ss")] [Changing Hostname]"
+    Rename-Computer -NewName $ADDSHostName
+
+    "3" | Out-File -FilePath $StateFile
+
+    Restart-Computer
+}
+
+
+if((Get-Content $StateFile) -eq 3)
 {
     try
     {
@@ -95,11 +106,11 @@ if((Get-Content $StateFile) -eq 2)
     $ACL.AddAccessRule($ACE)
     Set-Acl -Path "ad:CN=System Management, CN=System, $DCString" -AclObject $ACL 
 
-    "3" | Out-File -FilePath $StateFile
+    "4" | Out-File -FilePath $StateFile
 }
 
 
-if((Get-Content $StateFile) -eq 3)
+if((Get-Content $StateFile) -eq 4)
 {
     # Extend Active Directory Schema
     if(! (Test-Path -Path "\\$SCCMHostName\c$"))
@@ -113,11 +124,11 @@ if((Get-Content $StateFile) -eq 3)
         & "\\$SCCMHostName\c$\Media\SCCM\SMSSETUP\BIN\X64\extadsch.exe"
         #Get-Content "C:\ExtADSch.log" | Select-String "the Active Directory Schema"
 
-        "4" | Out-File -FilePath $StateFile
+        "5" | Out-File -FilePath $StateFile
     }
 }
 
-if((Get-Content $StateFile) -eq 4)
+if((Get-Content $StateFile) -eq 5)
 {
     $OrgUnits = @(
         "Groups",
@@ -160,6 +171,12 @@ if((Get-Content $StateFile) -eq 4)
     Add-ADGroupMember -Identity "sccmadmins" -Members "sccmadmin"
     Add-ADGroupMember -Identity "sccmadmins" -Members "sccmremoteuser"
 
+    "6" | Out-File -FilePath $StateFile
+}
+
+
+if((Get-Content $StateFile) -eq 6)
+{
     Remove-Item -Path $StateFile | Out-Null
 
     Write-Host "done: [$(Get-Date -Format "HH:mm:ss")]"
