@@ -43,15 +43,16 @@ if((Get-Content $StateFile) -eq 0)
 # NEED TO REWRITE THIS, IT WILL FAIL
 if((Get-Content $StateFile) -eq 1)
 {
-    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [SCCM Features]"
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [.NET Features]"
+    Install-WindowsFeature -Name "NET-Framework-Features" -IncludeAllSubFeature
+    Install-WindowsFeature -Name "NET-Framework-45-Features" -IncludeAllSubFeature
 
-    foreach($feature in $SCCMFeatures)
-    {
-        if((Get-WindowsFeature -Name "$feature").InstallState -ne 'Installed')
-        {
-            Install-WindowsFeature -Name "$feature" -ComputerName $SCCMHostname
-        }
-    }
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [BITS Features]"
+    Install-WindowsFeature -Name "BITS" -IncludeAllSubFeature
+    Install-WindowsFeature -Name "RDC"
+
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [IIS Web Server Role]"
+    Install-WindowsFeature -Name "Web-Server" -IncludeManagementTools -IncludeAllSubFeature
 
     "2" | Out-File -FilePath $StateFile
 }
@@ -59,9 +60,10 @@ if((Get-Content $StateFile) -eq 1)
 
 if((Get-Content $StateFile) -eq 2)
 {
-    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [MDT]"
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [Assessment and Deployment Kit]"
 
-    Start-Process -FilePath "C:\Windows\System32\msiexec.exe" -ArgumentList "/i C:\Media\MDT\MicrosoftDeploymentToolkit_x64.msi /q /n /norestart" -Wait -WindowStyle Hidden
+    Start-Process -FilePath "C:\Media\ADK\adksetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.DeploymentTools OptionId.UserStateMigrationTool /q' -Wait -WindowStyle Hidden
+    Start-Process -FilePath "C:\Media\ADKPE\adksetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.WindowsPreinstallationEnvironment /q' -Wait -WindowStyle Hidden
 
     "3" | Out-File -FilePath $StateFile
 }
@@ -69,10 +71,11 @@ if((Get-Content $StateFile) -eq 2)
 
 if((Get-Content $StateFile) -eq 3)
 {
-    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [ADK]"
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [Microsoft SQL Server]"
 
-    Start-Process -FilePath "C:\Media\ADK\adksetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.DeploymentTools OptionId.UserStateMigrationTool /q' -Wait -WindowStyle Hidden
-    Start-Process -FilePath "C:\Media\ADKPE\adksetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.WindowsPreinstallationEnvironment /q' -Wait -WindowStyle Hidden
+    Start-Process -FilePath "C:\Media\SQL\setup.exe" -ArgumentList "/CONFIGURATIONFILE=C:\Media\SQL\ConfigurationFile.ini /IACCEPTSQLSERVERLICENSETERMS" -Wait -WindowStyle Hidden
+    Start-Process -FilePath "C:\Media\SQL\SQLServerReportingServices.exe" -ArgumentList "/passive /norestart /IAcceptLicenseTerms /Edition=Eval" -Wait -WindowStyle Hidden
+    Start-Process -FilePath "C:\Media\SQL\SSMS-Setup-ENU.exe" -ArgumentList "/install /passive /norestart" -Wait -WindowStyle Hidden
 
     "4" | Out-File -FilePath $StateFile
 }
@@ -80,11 +83,12 @@ if((Get-Content $StateFile) -eq 3)
 
 if((Get-Content $StateFile) -eq 4)
 {
-    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [Microsoft SQL Server]"
-
-    Start-Process -FilePath "C:\Media\SQL\setup.exe" -ArgumentList "/CONFIGURATIONFILE=C:\Media\SQL\ConfigurationFile.ini /IACCEPTSQLSERVERLICENSETERMS" -Wait -WindowStyle Hidden
-    Start-Process -FilePath "C:\Media\SQL\SQLServerReportingServices.exe" -ArgumentList "/passive /norestart /IAcceptLicenseTerms /Edition=Eval" -Wait -WindowStyle Hidden
-    Start-Process -FilePath "C:\Media\SQL\SSMS-Setup-ENU.exe" -ArgumentList "/install /passive /norestart" -Wait -WindowStyle Hidden
+    Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [WSUS]"
+    Install-WindowsFeature -Name "WAS" -IncludeAllSubFeature
+    Install-WindowsFeature -Name "Windows-Internal-Database" -IncludeAllSubFeature
+    Install-WindowsFeature -Name "UpdateServices-RSAT" -IncludeManagementTools -IncludeAllSubFeature
+    Install-WindowsFeature -Name "UpdateServices-Services"
+    Install-WindowsFeature -Name "UpdateServices-DB"
 
     "5" | Out-File -FilePath $StateFile
 }
@@ -112,3 +116,6 @@ if((Get-Content $StateFile) -eq 6)
 #    Set-NetFirewallRule -DisplayGroup "File And Printer Sharing" -Enabled True -Profile Private
 #}
 #Invoke-Command -ComputerName $ADDSHostName -ScriptBlock $PayLoad
+
+#Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [MDT]"
+#Start-Process -FilePath "C:\Windows\System32\msiexec.exe" -ArgumentList "/i C:\Media\MDT\MicrosoftDeploymentToolkit_x64.msi /q /n /norestart" -Wait -WindowStyle Hidden

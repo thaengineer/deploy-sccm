@@ -43,7 +43,7 @@ if(! (Test-Path -Path "C:\Temp\state.txt"))
 if((Get-Content $StateFile) -eq 0)
 {
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [Active Directory Domain Services]"
-    Install-WindowsFeature -name "AD-Domain-Services" -IncludeManagementTools
+    Install-WindowsFeature -Name "AD-Domain-Services" -IncludeManagementTools
 
     Install-ADDSForest -DomainName $DomainName -SafeModeAdministratorPassword $pass -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainNetbiosName $NetBIOSName -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$true -SysvolPath "C:\Windows\SYSVOL" -Force:$true -Verbose
 
