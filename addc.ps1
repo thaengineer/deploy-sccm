@@ -1,11 +1,30 @@
 $StateFile    = "C:\Temp\state.txt"
 $DomainName   = "homelabcoderz.com"
+$NetBIOSName  = "HOMELABCODERZ"
 $pass         = ConvertTo-SecureString "Password?123" -AsPlainText -Force
 $ADDSHostName = "DC01"
 $SCCMHostName = "CM01"
+$NIC          = (Get-NetAdapter).Name
+$IPAddress    = "192.168.160.2"
+$NetMask      = "255.255.255.0"
+$PrefixLen    = 24
+$GateWay      = "192.168.160.1"
+$DNSServers   = ("1.1.1.1", "1.0.0.1")
+$DHCPRange    = ("192.168.160.2", "192.168.160.200")
+$DCString     = ""
 
 
-# ((Get-WindowsFeature) | where { $_.InstallState -eq 'Installed' })
+foreach($DC in 1..$DomainName.Split('.').Length)
+{
+    if($($DC - $DomainName.Split('.').Length - 1) -eq -1)
+    {
+        $DCString += "DC=$($DomainName.Split('.')[$($DC - 1)])"
+    }
+    else
+    {
+        $DCString += "DC=$($DomainName.Split('.')[$($DC - 1)]), "
+    }
+}
 
 
 if(! (Test-Path -Path "C:\Temp"))
@@ -24,7 +43,7 @@ if((Get-Content $StateFile) -eq 0)
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [Active Directory Domain Services]"
     Install-WindowsFeature -name "AD-Domain-Services" -IncludeManagementTools
 
-    Install-ADDSForest -DomainName "homelabcoderz.com" -SafeModeAdministratorPassword $pass -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainNetbiosName "HOMELABCODERZ" -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$true -SysvolPath "C:\Windows\SYSVOL" -Force:$true -Verbose
+    Install-ADDSForest -DomainName $DomainName -SafeModeAdministratorPassword $pass -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainNetbiosName $NetBIOSName -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$true -SysvolPath "C:\Windows\SYSVOL" -Force:$true -Verbose
 
     "1" | Out-File -FilePath $StateFile
 }
@@ -32,13 +51,6 @@ if((Get-Content $StateFile) -eq 0)
 
 if((Get-Content $StateFile) -eq 1)
 {
-    $NIC         = (Get-NetAdapter).Name
-    $IPAddress   = "192.168.160.2"
-    $NetMask     = "255.255.255.0"
-    $PrefixLen   = 24
-    $GateWay     = "192.168.160.1"
-    $DNSServers = ("1.1.1.1", "1.0.0.1")
-
     New-NetIPAddress -IPAddress $IPAddress -InterfaceAlias $NIC -DefaultGateway $GateWay -AddressFamily "IPv4" -PrefixLength $PrefixLen
     Set-DnsClientServerAddress -InterfaceAlias $NIC -ServerAddresses $DNSServers
 
@@ -47,29 +59,40 @@ if((Get-Content $StateFile) -eq 1)
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [DHCP]"
     Install-WindowsFeature -name "DHCP" -IncludeManagementTools
 
-    Add-DhcpServerv4Scope -Name "Scope" -StartRange "192.168.160.2" -EndRange "192.168.160.200" -SubnetMask $NetMask -LeaseDuration 8.00:00:00
+    Add-DhcpServerv4Scope -Name "Scope" -StartRange $DHCPRange[0] -EndRange $DHCPRange[1] -SubnetMask $NetMask -LeaseDuration 8.00:00:00
     Add-DhcpServerInDC -DnsName "$ADDSHostName.$DomainName" -IPAddress $IPAddress
+
     Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\12" -Name "ConfigurationState" -Value "2"
 
     "2" | Out-File -FilePath $StateFile
 
-    Restart-Computer
+    exit(0)
+
+    # Restart-Computer
 }
 
 
 if((Get-Content $StateFile) -eq 2)
 {
+    try
+    {
+        $Computer = Get-ADComputer -Identity $SCCMHostName
+    }
+    catch
+    {
+        Write-Host "error: $SCCMHostName not joined to domain"
+        exit(1)
+    }
+
     # Create System Management container and delegate access to the SCCM Server
-    $SCCMHostName = "CM01"
-    $root         = (Get-ADRootDSE).defaultNamingContext
-    $OU           = New-ADObject -Name "System Management" -Path "CN=System, DC=homelabcoderz, DC=com" -Type "Container" -PassThru
-    $ACL          = Get-Acl "ad:CN=System Management,CN=System,$root"
-    $computer     = Get-ADComputer -Identity $SCCMHostName
-    $SID          = [System.Security.Principal.SecurityIdentifier] $computer.SID
+    # $root         = (Get-ADRootDSE).defaultNamingContext
+    $OU           = New-ADObject -Name "System Management" -Path "CN=System, $DCString" -Type "Container" -PassThru
+    $ACL          = Get-Acl "ad:$OU"
+    $SID          = [System.Security.Principal.SecurityIdentifier] $Computer.SID
     $ACE          = New-Object System.DirectoryServices.ActiveDirectoryAccessRule $SID, "GenericAll", "Allow"
 
     $ACL.AddAccessRule($ACE)
-    Set-Acl -Path "ad:CN=System Management,CN=System,$root" -AclObject $ACL 
+    Set-Acl -Path "ad:CN=System Management, CN=System, $DCString" -AclObject $ACL 
 
     "3" | Out-File -FilePath $StateFile
 }
@@ -78,8 +101,6 @@ if((Get-Content $StateFile) -eq 2)
 if((Get-Content $StateFile) -eq 3)
 {
     # Extend Active Directory Schema
-    $SCCMHostName = "CM01"
-
     if(! (Test-Path -Path "\\$SCCMHostName\c$"))
     {
         Write-Host "error: path to $SCCMHostName not found"
@@ -88,7 +109,7 @@ if((Get-Content $StateFile) -eq 3)
     else
     {
         & "\\$SCCMHostName\c$\Media\SCCM\SMSSETUP\BIN\X64\extadsch.exe"
-        Get-Content "C:\ExtADSch.log" | Select-String "the Active Directory Schema"
+        #Get-Content "C:\ExtADSch.log" | Select-String "the Active Directory Schema"
 
         "4" | Out-File -FilePath $StateFile
     }
