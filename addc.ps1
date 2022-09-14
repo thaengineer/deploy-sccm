@@ -11,7 +11,7 @@ $PrefixLen    = 24
 $GateWay      = "192.168.160.1"
 $DNSServers   = ("1.1.1.1", "1.0.0.1")
 $DHCPRange    = ("192.168.160.2", "192.168.160.200")
-$DCString     = ""
+$DCString     = "" # leave string empty
 
 
 foreach($DC in 1..$DomainName.Split('.').Length)
@@ -160,5 +160,5 @@ if((Get-Content $StateFile) -eq 4)
 
     Remove-Item -Path $StateFile | Out-Null
 
-    Write-Host "completed: [$(Get-Date -Format "HH:mm:ss")]"
+    Write-Host "done: [$(Get-Date -Format "HH:mm:ss")]"
 }
