@@ -3,6 +3,11 @@ $DomainName   = "homelabcoderz.com"
 $ADDSHostName = "DC01"
 $SCCMHostName = "CM01"
 # $SiteCode     = "S01"
+$NIC          = (Get-NetAdapter).Name
+$IPAddress    = "10.0.0.3"
+$PrefixLen    = 24
+$GateWay      = "10.0.0.1"
+$DNSServers   = ("10.0.0.2", "1.1.1.1")
 $SCCMFeatures = Get-Content -Path '.\sccm-features.txt'
 $DomainAdmin  = "$DomainName\Administrator"
 $Pass         = ConvertTo-SecureString -String "Password?123" -AsPlainText -Force
@@ -25,6 +30,9 @@ if(! (Test-Path -Path "C:\Temp\state.txt"))
 if((Get-Content $StateFile) -eq 0)
 {
     Write-Host "joining: [$(Get-Date -Format "HH:mm:ss")] [$SCCMHostName -> $DomainName]"
+
+    New-NetIPAddress -IPAddress $IPAddress -InterfaceAlias $NIC -DefaultGateway $GateWay -AddressFamily "IPv4" -PrefixLength $PrefixLen
+    Set-DnsClientServerAddress -InterfaceAlias $NIC -ServerAddresses $DNSServers
 
     Add-Computer -Credential $Credential -DomainName $DomainName -Server $ADDSHostName -NewName $SCCMHostName -Restart
 

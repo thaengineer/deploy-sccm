@@ -5,12 +5,12 @@ $pass         = ConvertTo-SecureString "Password?123" -AsPlainText -Force
 $ADDSHostName = "DC01"
 $SCCMHostName = "CM01"
 $NIC          = (Get-NetAdapter).Name
-$IPAddress    = "192.168.160.2"
+$IPAddress    = "10.0.0.2"
 $NetMask      = "255.255.255.0"
 $PrefixLen    = 24
-$GateWay      = "192.168.160.1"
+$GateWay      = "10.0.0.1"
 $DNSServers   = ("1.1.1.1", "1.0.0.1")
-$DHCPRange    = ("192.168.160.2", "192.168.160.200")
+$DHCPRange    = ("10.0.0.2", "10.0.0.10")
 $DCString     = "" # leave string empty
 
 
