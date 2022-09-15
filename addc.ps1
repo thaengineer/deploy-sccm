@@ -166,6 +166,8 @@ if((Get-Content $StateFile) -eq 5)
         Add-ADGroupMember -Identity "Domain Admins" -Members $DomainAdmin
     }
 
+    Add-ADGroupMember -Identity "Group Policy Creator Owners" -Members "admins"
+
     Add-ADGroupMember -Identity "admins" -Members "admin"
     Add-ADGroupMember -Identity "sqladmins" -Members "sqladmin"
     Add-ADGroupMember -Identity "sccmadmins" -Members "adsync"
@@ -173,6 +175,49 @@ if((Get-Content $StateFile) -eq 5)
     Add-ADGroupMember -Identity "sccmadmins" -Members "sccmremoteuser"
 
     "6" | Out-File -FilePath $StateFile
+}
+
+
+if((Get-Content $StateFile) -eq 6)
+{
+    $FWRules = @(
+        "FPS-LLMNR-In-UDP",
+        "FPS-NB_Datagram-In-UDP",
+        "FPS-ICMP6-ERQ-In",
+        "FPS-SMB-In-TCP",
+        "FPS-ICMP4-ERQ-In",
+        "FPS-NB_Session-In-TCP",
+        "FPS-RPCSS-In-TCP",
+        "FPS-NB_Name-In-UDP",
+        "FPS-SpoolSvc-In-TCP",
+        "FPS-SMBQ-Out-UDP",
+        "FPS-LLMNR-Out-UDP",
+        "FPS-NB_Name-Out-UDP",
+        "FPS-NB_Datagram-Out-UDP",
+        "FPS-ICMP6-ERQ-Out",
+        "FPS-NB_Session-Out-TCP",
+        "FPS-SMB-Out-TCP",
+        "FPS-ICMP4-ERQ-Out",
+        "WMI-RPCSS-In-TCP",
+        "WMI-WINMGMT-In-TCP",
+        "WMI-ASYNC-In-TCP"
+    )
+
+    New-GPO -Name "Client Push Policy Settings"
+    New-GPO -Name "SQL Ports for SCCM"
+
+    foreach($FWRule in $FWRules)
+    {
+        Copy-NetFirewallRule -Name $FWRule -NewPolicyStore "homelabcoderz.com\Client Push Policy Settings"
+        Set-NetFirewallRule -Name $FWRule -PolicyStore "homelabcoderz.com\Client Push Policy Settings" -Enabled True
+    }
+
+    New-NetFirewallRule -PolicyStore "SQL Ports for SCCM" -DisplayName "1433 In TCP" -Direction Inbound -LocalPort 1433 -Protocol TCP -Action Allow -Profile Any -Enabled True
+    New-NetFirewallRule -PolicyStore "SQL Ports for SCCM" -DisplayName "4022 In TCP" -Direction Inbound -LocalPort 4022 -Protocol TCP -Action Allow -Profile Any -Enabled True
+
+    gpupdate /force
+
+    Write-Host "done: [$(Get-Date -Format "HH:mm:ss")]"
 }
 
 
