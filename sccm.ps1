@@ -8,7 +8,6 @@ $IPAddress    = "10.0.0.3"
 $PrefixLen    = 24
 $GateWay      = "10.0.0.1"
 $DNSServers   = ("10.0.0.2", "1.1.1.1")
-$SCCMFeatures = Get-Content -Path '.\sccm-features.txt'
 $DomainAdmin  = "$DomainName\Administrator"
 $Pass         = ConvertTo-SecureString -String "Password?123" -AsPlainText -Force
 $Credential   = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $DomainAdmin, $Pass
@@ -34,18 +33,19 @@ if((Get-Content $StateFile) -eq 0)
     New-NetIPAddress -IPAddress $IPAddress -InterfaceAlias $NIC -DefaultGateway $GateWay -AddressFamily "IPv4" -PrefixLength $PrefixLen
     Set-DnsClientServerAddress -InterfaceAlias $NIC -ServerAddresses $DNSServers
 
-    Add-Computer -Credential $Credential -DomainName $DomainName -Server $ADDSHostName -NewName $SCCMHostName -Restart
+    Add-Computer -Credential $Credential -DomainName $DomainName -Server $ADDSHostName -NewName $SCCMHostName
 
     "1" | Out-File -FilePath $StateFile
+
+    Restart-Computer
 }
 
 
-# NEED TO REWRITE THIS, IT WILL FAIL
 if((Get-Content $StateFile) -eq 1)
 {
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [.NET Features]"
-    Install-WindowsFeature -Name "NET-Framework-Features" -IncludeAllSubFeature
-    Install-WindowsFeature -Name "NET-Framework-45-Features" -IncludeAllSubFeature
+    Install-WindowsFeature -Name "NET-Framework-Features" -IncludeAllSubFeature # needs restart after
+    Install-WindowsFeature -Name "NET-Framework-45-Features" -IncludeAllSubFeature # needs restart after
 
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [BITS Features]"
     Install-WindowsFeature -Name "BITS" -IncludeAllSubFeature
@@ -55,6 +55,8 @@ if((Get-Content $StateFile) -eq 1)
     Install-WindowsFeature -Name "Web-Server" -IncludeManagementTools -IncludeAllSubFeature
 
     "2" | Out-File -FilePath $StateFile
+
+    exit(0)
 }
 
 
@@ -63,9 +65,11 @@ if((Get-Content $StateFile) -eq 2)
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [Assessment and Deployment Kit]"
 
     Start-Process -FilePath "C:\Media\ADK\adksetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.DeploymentTools OptionId.UserStateMigrationTool /q' -Wait -WindowStyle Hidden
-    Start-Process -FilePath "C:\Media\ADKPE\adksetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.WindowsPreinstallationEnvironment /q' -Wait -WindowStyle Hidden
+    Start-Process -FilePath "C:\Media\ADKPE\adkwinpesetup.exe" -ArgumentList '/ceip off /norestart /features OptionId.WindowsPreinstallationEnvironment /q' -Wait -WindowStyle Hidden
 
     "3" | Out-File -FilePath $StateFile
+
+    exit(0)
 }
 
 
@@ -73,11 +77,13 @@ if((Get-Content $StateFile) -eq 3)
 {
     Write-Host "installing: [$(Get-Date -Format "HH:mm:ss")] [Microsoft SQL Server]"
 
-    Start-Process -FilePath "C:\Media\SQL\setup.exe" -ArgumentList "/CONFIGURATIONFILE=C:\Media\SQL\ConfigurationFile.ini /IACCEPTSQLSERVERLICENSETERMS" -Wait -WindowStyle Hidden
+    Start-Process -FilePath "C:\Media\SQL\setup.exe" -ArgumentList "/CONFIGURATIONFILE=C:\Media\SQL\ConfigurationFile.ini /IACCEPTSQLSERVERLICENSETERMS" -Wait #-WindowStyle Hidden
     Start-Process -FilePath "C:\Media\SQL\SQLServerReportingServices.exe" -ArgumentList "/passive /norestart /IAcceptLicenseTerms /Edition=Eval" -Wait -WindowStyle Hidden
     Start-Process -FilePath "C:\Media\SQL\SSMS-Setup-ENU.exe" -ArgumentList "/install /passive /norestart" -Wait -WindowStyle Hidden
 
     "4" | Out-File -FilePath $StateFile
+
+    exit(0)
 }
 
 
@@ -90,7 +96,13 @@ if((Get-Content $StateFile) -eq 4)
     Install-WindowsFeature -Name "UpdateServices-Services"
     Install-WindowsFeature -Name "UpdateServices-DB"
 
+    & "C:\Program Files\Update Services\Tools\WsusUtil.exe" postinstall CONTENT_DIR=C:\Sources\Updates SQL_INSTANCE_NAME=$SCCMHostName.$DomainName
+
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\404" -Name "ConfigurationState" -Value "2"
+
     "5" | Out-File -FilePath $StateFile
+
+    exit(0)
 }
 
 

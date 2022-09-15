@@ -1,3 +1,4 @@
+#Import-Module ".\DeploySCCM.psm1"
 $StateFile    = "C:\Temp\state.txt"
 $DomainName   = "homelabcoderz.com"
 $NetBIOSName  = "HOMELABCODERZ"
@@ -5,12 +6,12 @@ $pass         = ConvertTo-SecureString "Password?123" -AsPlainText -Force
 $ADDSHostName = "DC01"
 $SCCMHostName = "CM01"
 $NIC          = (Get-NetAdapter).Name
-$IPAddress    = "10.0.0.2"
+$GateWay      = (Get-NetIPConfiguration -InterfaceAlias $NIC).IPv4DefaultGateway.NextHop
+$IPAddress    = "10.0.0.$([int]$GateWay.Split('.')[-1] + 1)"
 $NetMask      = "255.255.255.0"
 $PrefixLen    = 24
-$GateWay      = "10.0.0.1"
 $DNSServers   = ("1.1.1.1", "1.0.0.1")
-$DHCPRange    = ("10.0.0.2", "10.0.0.10")
+$DHCPRange    = ($IPAddress, "$([int]$IPAddress.Split('.')[0]).$([int]$IPAddress.Split('.')[1]).$([int]$IPAddress.Split('.')[2]).$([int]$IPAddress.Split('.')[-1] + 10)")
 $DCString     = "" # leave string empty
 
 
