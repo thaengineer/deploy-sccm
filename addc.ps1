@@ -1,7 +1,7 @@
 #Import-Module ".\DeploySCCM.psm1"
 $StateFile    = "C:\Temp\state.txt"
-$DomainName   = "homelabcoderz.com"
-$NetBIOSName  = "HOMELABCODERZ"
+$DomainName   = "domain.com"
+$NetBIOSName  = "DOMAIN"
 $pass         = ConvertTo-SecureString "Password?123" -AsPlainText -Force
 $ADDSHostName = "DC01"
 $SCCMHostName = "CM01"
