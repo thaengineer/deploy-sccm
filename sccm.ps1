@@ -1,5 +1,5 @@
 $StateFile    = "C:\Temp\state.txt"
-$DomainName   = "homelabcoderz.com"
+$DomainName   = "domain.com"
 $ADDSHostName = "DC01"
 $SCCMHostName = "CM01"
 # $SiteCode     = "S01"
